@@ -50,12 +50,12 @@ const AboutPage = () => {
       </div>
 
       {/* Our Story Section */}
-      <section className="py-20 bg-white">
+      <section className="py-24 bg-gradient-to-b from-white to-purple-50 dark:from-gray-900 dark:to-gray-950">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-12 items-center">
             <div>
-              <h2 className="text-4xl font-bold text-gray-900 mb-6">Our Story</h2>
-              <div className="space-y-6 text-lg text-gray-600 leading-relaxed">
+              <h2 className="text-4xl font-bold text-gray-100 mb-6">Our Story</h2>
+              <div className="text-4l text-gray-300 mb-6">
                 <p>
                   EventCraft was born from a simple belief: every celebration deserves to be extraordinary. 
                   Founded in 2018 by a team of passionate event enthusiasts, we started with a mission to 
@@ -90,13 +90,13 @@ const AboutPage = () => {
       </section>
 
       {/* Mission & Vision */}
-      <section className="py-20 bg-gradient-to-br from-purple-50 to-amber-50">
+      <section className="py-24 bg-gradient-to-b from-white to-purple-50 dark:from-gray-900 dark:to-gray-950">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-12">
             <div className="bg-white rounded-2xl shadow-xl p-8">
               <div className="flex items-center mb-6">
                 <Target className="h-8 w-8 text-purple-600 mr-4" />
-                <h3 className="text-2xl font-bold text-gray-900">Our Mission</h3>
+                <h3 className="text-2xl font-bold text-gray-700">Our Mission</h3>
               </div>
               <p className="text-lg text-gray-600 leading-relaxed">
                 To create extraordinary experiences that celebrate life's most precious moments. We strive to 
@@ -148,10 +148,10 @@ const AboutPage = () => {
       </section>
 
       {/* Timeline */}
-      <section className="py-20 bg-gray-50">
+      <section className="py-24 bg-gradient-to-b from-white to-purple-50 dark:from-gray-900 dark:to-gray-700">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="text-center mb-16">
-            <h2 className="text-4xl font-bold text-gray-900 mb-4">Our Journey</h2>
+            <h2 className="text-4xl font-bold text-gray-400 mb-4">Our Journey</h2>
             <p className="text-xl text-gray-600 max-w-3xl mx-auto">
               From humble beginnings to industry leadership - here's how we've grown over the years.
             </p>
