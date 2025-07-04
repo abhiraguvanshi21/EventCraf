@@ -14,6 +14,12 @@ import LoginPage from './pages/LoginPage';
 import SignupPage from './pages/SignupPage';
 import BookingPage from './pages/BookingPage';
 import AdminVendorEditor from './pages/AdminVendorEditor';
+import AboutPage from './pages/AboutPage';
+import TeamPage from './pages/TeamPage';
+import PortfolioPage from './pages/PortfolioPage';
+import TestimonialsPage from './pages/TestimonialsPage';
+import BlogPage from './pages/BlogPage';
+import CareersPage from './pages/CareersPage';
 
 function App() {
   return (
@@ -34,6 +40,12 @@ function App() {
             <Route path="planning" element={<PlanningPage />} />
             <Route path="contact" element={<ContactPage />} />
             <Route path="/admin/edit-vendor/:id" element={<AdminVendorEditor />} />
+            <Route path="about" element={<AboutPage />} />
+            <Route path="team" element={<TeamPage />} />
+            <Route path="portfolio" element={<PortfolioPage />} />
+            <Route path="testimonials" element={<TestimonialsPage />} />
+            <Route path="blog" element={<BlogPage />} />
+            <Route path="careers" element={<CareersPage />} />
           </Route>
         </Routes>
       </Router>
