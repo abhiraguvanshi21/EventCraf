@@ -4,6 +4,7 @@ interface User {
   id: string;
   name: string;
   email: string;
+  phone?: string;
   accountType: 'user' | 'vendor';
   shopName?: string;
   vendorType?: string;
@@ -69,6 +70,7 @@ interface AuthContextType {
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
+// eslint-disable-next-line react-refresh/only-export-components
 export const useAuth = () => {
   const context = useContext(AuthContext);
   if (!context) throw new Error('useAuth must be used within an AuthProvider');

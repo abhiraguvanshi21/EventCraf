@@ -1,38 +1,23 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
-import {
-  Users,
+import { 
+  Star, 
+  CheckCircle, 
+  ArrowLeft,
   CreditCard,
-  CheckCircle,
-  Star,
-  Filter,
-  Search,
-  X,
-  Eye,
-  Plus,
-  Minus,
+  Smartphone,
+  MessageCircle,
+  Wallet,
+  Shield,
+  AlertCircle,
+  Copy,
+  ExternalLink
 } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 
-interface Vendor {
-  id: string;
-  name: string;
-  service: string;
-  category: string;
-  rating: number;
-  price: string;
-  priceMin: number;
-  priceMax: number;
-  image: string;
-  contact: string;
-  description: string;
-  location: string;
-  experience: string;
-  specialties: string[];
-}
 
-const allVendors: Vendor[] = [
-  // Tent & Canopy Services
+// Mock vendor data - in a real app, this would come from an API
+const mockVendors = [
   {
     id: 'elite-tent-house',
     name: 'Elite Tent House',
@@ -264,43 +249,21 @@ const allVendors: Vendor[] = [
   }
 ];
 
-const categories = [
-  { id: 'all', name: 'All Categories' },
-  { id: 'tent-canopy', name: 'Tent & Canopy' },
-  { id: 'catering', name: 'Food & Catering' },
-  { id: 'floral', name: 'Floral Design' },
-  { id: 'audio-visual', name: 'Audio Visual' },
-  { id: 'photography', name: 'Photography' },
-  { id: 'decoration', name: 'Event Decoration' }
-];
-
-const budgetRanges = [
-  { id: 'all', name: 'All Budgets', min: 0, max: Infinity },
-  { id: 'under-10k', name: 'Under ₹10,000', min: 0, max: 10000 },
-  { id: '10k-25k', name: '₹10,000 - ₹25,000', min: 10000, max: 25000 },
-  { id: '25k-50k', name: '₹25,000 - ₹50,000', min: 25000, max: 50000 },
-  { id: '50k-100k', name: '₹50,000 - ₹1,00,000', min: 50000, max: 100000 },
-  { id: 'over-100k', name: 'Over ₹1,00,000', min: 100000, max: Infinity }
-];
-
-const serviceTypeMapping = {
-  weddings: 'wedding',
-  engagements: 'engagement',
-  corporate: 'corporate',
-  'family-functions': 'family',
-  'birthday-parties': 'birthday',
-  'special-occasions': 'anniversary',
-};
-
 const BookingPage = () => {
-  const { user, saveBookingData } = useAuth();
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
-
+  const { user, saveBookingData } = useAuth();
+  
   const [currentStep, setCurrentStep] = useState(1);
-  const [bookingData, setBookingData] = useState({
+  const [selectedVendors, setSelectedVendors] = useState<Array<{
+    vendor: typeof mockVendors[0];
+    quantity: number;
+    selectedBudget?: number;
+  }>>([]);
+
+  const [eventDetails, setEventDetails] = useState({
     eventName: '',
-    eventType: '',
+    eventType: searchParams.get('service') || '',
     date: '',
     time: '',
     venue: '',
@@ -308,913 +271,251 @@ const BookingPage = () => {
     budget: '',
     description: '',
     theme: '',
-    specialRequirements: '',
-    selectedVendors: [] as { vendor: Vendor; quantity: number; selectedBudget?: number }[],
-    advanceAmount: 0,
-    totalAmount: 0,
+    specialRequirements: ''
   });
 
-  const [paymentData, setPaymentData] = useState({
-    cardNumber: '',
-    expiryDate: '',
-    cvv: '',
-    cardholderName: '',
-    paymentMethod: 'card',
-    upiApp: '',
+  const [contactInfo, setContactInfo] = useState({
+    name: user?.name || '',
+    email: user?.email || '',
+    phone: user?.phone || '',
+    alternatePhone: '',
+    address: ''
   });
 
-  // Vendor selection filters
-  const [vendorFilters, setVendorFilters] = useState({
-    category: 'all',
-    budget: 'all',
-    search: '',
-  });
+  const [paymentMethod, setPaymentMethod] = useState('');
+  const [selectedUpiApp, setSelectedUpiApp] = useState('');
+  const [userUpiId, setUserUpiId] = useState('');
+  const [paymentStatus, setPaymentStatus] = useState('');
+  const [isProcessingPayment, setIsProcessingPayment] = useState(false);
 
-  const [showVendorModal, setShowVendorModal] = useState(false);
+  // Company payment details
+  const companyUpiId = 'eventcraft@paytm';
+  const companyPhone = '+91 9161036941';
 
-  // Pre-fill event type based on service parameter
+  const upiApps = [
+    { id: 'paytm', name: 'Paytm', scheme: 'paytmmp' },
+    { id: 'phonepe', name: 'PhonePe', scheme: 'phonepe' },
+    { id: 'googlepay', name: 'Google Pay', scheme: 'tez' },
+    { id: 'bhim', name: 'BHIM UPI', scheme: 'bhim' }
+  ];
+
   useEffect(() => {
-    const serviceParam = searchParams.get('service');
-    if (
-      serviceParam &&
-      serviceTypeMapping[serviceParam as keyof typeof serviceTypeMapping]
-    ) {
-      setBookingData((prev) => ({
-        ...prev,
-        eventType:
-          serviceTypeMapping[serviceParam as keyof typeof serviceTypeMapping],
-      }));
+    if (!user) {
+      navigate('/login', { state: { from: { pathname: '/booking' } } });
     }
-  }, [searchParams]);
+  }, [user, navigate]);
 
-  const handleInputChange = (
-    e: React.ChangeEvent<
-      HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement
-    >
-  ) => {
-    setBookingData({
-      ...bookingData,
-      [e.target.name]: e.target.value,
-    });
+  const handleEventDetailsSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    setCurrentStep(2);
   };
 
-  const filteredVendors = allVendors.filter((vendor) => {
-    const categoryMatch = vendorFilters.category === 'all' || vendor.category === vendorFilters.category;
+  const handleVendorSelection = (vendor: typeof mockVendors[0], quantity: number, budget?: number) => {
+    const existingIndex = selectedVendors.findIndex(v => v.vendor.id === vendor.id);
     
-    const budgetRange = budgetRanges.find(range => range.id === vendorFilters.budget);
-    const budgetMatch = !budgetRange || budgetRange.id === 'all' || 
-      (vendor.priceMin >= budgetRange.min && vendor.priceMin <= budgetRange.max);
-    
-    const searchMatch = !vendorFilters.search || 
-      vendor.name.toLowerCase().includes(vendorFilters.search.toLowerCase()) ||
-      vendor.service.toLowerCase().includes(vendorFilters.search.toLowerCase()) ||
-      vendor.description.toLowerCase().includes(vendorFilters.search.toLowerCase());
-
-    return categoryMatch && budgetMatch && searchMatch;
-  });
-
-  const addVendor = (vendor: Vendor, selectedBudget?: number) => {
-    const existingVendor = bookingData.selectedVendors.find(v => v.vendor.id === vendor.id);
-    
-    if (existingVendor) {
-      // Increase quantity
-      updateVendorQuantity(vendor.id, existingVendor.quantity + 1);
+    if (existingIndex >= 0) {
+      const updated = [...selectedVendors];
+      updated[existingIndex] = { vendor, quantity, selectedBudget: budget };
+      setSelectedVendors(updated);
     } else {
-      // Add new vendor
-      const updatedVendors = [...bookingData.selectedVendors, { vendor, quantity: 1, selectedBudget }];
-      updateBookingTotals(updatedVendors);
+      setSelectedVendors([...selectedVendors, { vendor, quantity, selectedBudget: budget }]);
     }
   };
 
   const removeVendor = (vendorId: string) => {
-    const updatedVendors = bookingData.selectedVendors.filter(v => v.vendor.id !== vendorId);
-    updateBookingTotals(updatedVendors);
+    setSelectedVendors(selectedVendors.filter(v => v.vendor.id !== vendorId));
   };
 
-  const updateVendorQuantity = (vendorId: string, quantity: number) => {
-    if (quantity <= 0) {
-      removeVendor(vendorId);
+  const calculateTotal = () => {
+    return selectedVendors.reduce((total, { vendor, quantity, selectedBudget }) => {
+      const cost = selectedBudget || vendor.priceMin;
+      const totalCost = vendor.service.includes('person') 
+        ? cost * parseInt(eventDetails.guestCount || '50') * quantity
+        : cost * quantity;
+      return total + totalCost;
+    }, 0);
+  };
+
+  const totalAmount = calculateTotal();
+  const advanceAmount = Math.round(totalAmount * 0.3); // 30% advance
+  const remainingAmount = totalAmount - advanceAmount;
+
+  const handleContactSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (selectedVendors.length === 0) {
+      alert('Please select at least one vendor before proceeding to payment.');
+      return;
+    }
+    setCurrentStep(3);
+  };
+
+  const copyToClipboard = (text: string) => {
+    navigator.clipboard.writeText(text);
+    alert('Copied to clipboard!');
+  };
+
+  const handleUpiPayment = async () => {
+    if (!selectedUpiApp || !userUpiId || !contactInfo.phone) {
+      alert('Please select UPI app, enter your UPI ID, and provide phone number');
       return;
     }
 
-    const updatedVendors = bookingData.selectedVendors.map(v => 
-      v.vendor.id === vendorId ? { ...v, quantity } : v
-    );
-    updateBookingTotals(updatedVendors);
-  };
+    setIsProcessingPayment(true);
+    setPaymentStatus('processing');
 
-  const updateBookingTotals = (vendors: { vendor: Vendor; quantity: number; selectedBudget?: number }[]) => {
-    const totalAmount = vendors.reduce((sum, { vendor, quantity, selectedBudget }) => {
-      let price = selectedBudget || vendor.priceMin;
+    try {
+      // Create UPI payment URL
+      const upiUrl = `upi://pay?pa=${companyUpiId}&pn=EventCraft&am=${advanceAmount}&cu=INR&tn=Event Booking Advance Payment`;
       
-      if (vendor.service.includes('person')) {
-        price = price * parseInt(bookingData.guestCount || '50') * quantity;
-      } else {
-        price = price * quantity;
+      // Try to open the selected UPI app
+      const app = upiApps.find(app => app.id === selectedUpiApp);
+      if (app) {
+        // Create app-specific URL
+        const appUrl = `${app.scheme}://upi/pay?pa=${companyUpiId}&pn=EventCraft&am=${advanceAmount}&cu=INR&tn=Event Booking Advance Payment`;
+        
+        // Try to open the app
+        window.location.href = appUrl;
+        
+        // Fallback to generic UPI URL after a delay
+        setTimeout(() => {
+          window.location.href = upiUrl;
+        }, 2000);
       }
+
+      // Send WhatsApp message with payment details
+      const whatsappMessage = `Hi! I want to make payment for event booking.
       
-      return sum + price;
-    }, 0);
+*Payment Details:*
+- Amount: ₹${advanceAmount.toLocaleString()}
+- UPI ID: ${companyUpiId}
+- My UPI ID: ${userUpiId}
+- Phone: ${contactInfo.phone}
+- Event: ${eventDetails.eventName || eventDetails.eventType}
+- Date: ${eventDetails.date}
 
-    const advanceAmount = Math.round(totalAmount * 0.4); // 30% advance
+Please confirm payment receipt.`;
 
-    setBookingData(prev => ({
-      ...prev,
-      selectedVendors: vendors,
-      totalAmount,
-      advanceAmount,
-    }));
-  };
+      const whatsappUrl = `https://wa.me/${companyPhone.replace(/[^0-9]/g, '')}?text=${encodeURIComponent(whatsappMessage)}`;
+      window.open(whatsappUrl, '_blank');
 
-  const handlePaymentChange = (
-    e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>
-  ) => {
-    setPaymentData({
-      ...paymentData,
-      [e.target.name]: e.target.value,
-    });
-  };
+      // Simulate payment processing
+      setTimeout(() => {
+        setPaymentStatus('completed');
+        setIsProcessingPayment(false);
+        
+        // Save booking data
+        const bookingData = {
+          ...eventDetails,
+          ...contactInfo,
+          selectedVendors,
+          totalAmount,
+          advanceAmount,
+          paymentMethod: `UPI - ${app?.name}`,
+          userUpiId,
+          companyUpiId,
+          id: Date.now().toString(),
+          paidAmount: advanceAmount,
+          status: 'confirmed' as "confirmed" | "completed" | "pending",
+          bookingDate: new Date().toISOString(),
+        };
+        
+        saveBookingData(bookingData);
+        setCurrentStep(4);
+      }, 3000);
 
-  const nextStep = () => {
-    if (currentStep < 4) {
-      setCurrentStep(currentStep + 1);
+    } catch (error) {
+      console.error('Payment error:', error);
+      setPaymentStatus('failed');
+      setIsProcessingPayment(false);
+      alert('Payment failed. Please try again.');
     }
   };
 
-  const prevStep = () => {
-    if (currentStep > 1) {
-      setCurrentStep(currentStep - 1);
+  const handlePhonePayment = () => {
+    if (!contactInfo.phone) {
+      alert('Please provide your phone number');
+      return;
     }
-  };
 
-  const [paymentStatus, setPaymentStatus] = useState<'pending' | 'completed' | 'failed' | null>(null);
-  const [paymentMessage, setPaymentMessage] = useState<string>('');
+    setIsProcessingPayment(true);
+    setPaymentStatus('processing');
 
-  const sendPaymentMessageToApp = (method: string) => {
-    // Simulate sending a message to the app after payment method selection
-    console.log(`Payment method selected: ${method}`);
-    setPaymentMessage(`Payment method selected: ${method}`);
-  };
+    const whatsappMessage = `Hi! I want to make payment for event booking.
+    
+*Payment Details:*
+- Amount: ₹${advanceAmount.toLocaleString()}
+- Company UPI ID: ${companyUpiId}
+- My Phone: ${contactInfo.phone}
+- Event: ${eventDetails.eventName || eventDetails.eventType}
+- Date: ${eventDetails.date}
 
-  const processPayment = () => {
-    // Simulate payment processing and giving money
-    setPaymentStatus('pending');
+Please send me payment link or UPI details.`;
+
+    const whatsappUrl = `https://wa.me/${companyPhone.replace(/[^0-9]/g, '')}?text=${encodeURIComponent(whatsappMessage)}`;
+    window.open(whatsappUrl, '_blank');
+
     setTimeout(() => {
       setPaymentStatus('completed');
-      setPaymentMessage('Payment successful! Money has been transferred.');
+      setIsProcessingPayment(false);
+      
+      const bookingData = {
+        ...eventDetails,
+        ...contactInfo,
+        selectedVendors,
+        totalAmount,
+        advanceAmount,
+        paymentMethod: 'Phone Payment',
+        companyUpiId,
+        id: Date.now().toString(),
+        paidAmount: advanceAmount,
+        status: 'confirmed' as "confirmed" | "completed" | "pending",
+        bookingDate: new Date().toISOString(),
+      };
+      
+      saveBookingData(bookingData);
+      setCurrentStep(4);
     }, 2000);
   };
 
-  const handleBookingSubmit = () => {
-    if (paymentStatus !== 'completed') {
-      processPayment();
+  const handleCardPayment = () => {
+    if (!contactInfo.phone) {
+      alert('Please provide your phone number');
       return;
     }
 
-    // Prepare full booking data with required fields
-    const fullBookingData = {
-      ...bookingData,
-      id: `booking-${Date.now()}`,
-      paidAmount: bookingData.advanceAmount,
-      status: "confirmed" as const,
-      bookingDate: new Date().toISOString(),
-    };
-    // Save booking data to context
-    saveBookingData(fullBookingData);
+    setIsProcessingPayment(true);
+    setPaymentStatus('processing');
 
-    // Redirect to planning page after successful booking
-    navigate('/planning');
-  };
-
-  const renderStepContent = () => {
-    switch (currentStep) {
-      case 1:
-        return (
-          <div className="space-y-6">
-            <h3 className="text-2xl font-bold text-gray-900 mb-6">
-              Event Details
-            </h3>
-
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Event Name *
-                </label>
-                <input
-                  type="text"
-                  name="eventName"
-                  value={bookingData.eventName}
-                  onChange={handleInputChange}
-                  className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent"
-                  placeholder="Enter event name"
-                  required
-                />
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Event Type *
-                </label>
-                <select
-                  name="eventType"
-                  value={bookingData.eventType}
-                  onChange={handleInputChange}
-                  className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent"
-                  required
-                >
-                  <option value="">Select event type</option>
-                  <option value="wedding">Wedding</option>
-                  <option value="engagement">Engagement</option>
-                  <option value="birthday">Birthday Party</option>
-                  <option value="corporate">Corporate Event</option>
-                  <option value="tilak">Tilak Ceremony</option>
-                  <option value="haldi">Haldi Ceremony</option>
-                  <option value="anniversary">Anniversary</option>
-                  <option value="family">Family Function</option>
-                  <option value="other">Other</option>
-                </select>
-              </div>
-            </div>
-
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Event Date *
-                </label>
-                <input
-                  type="date"
-                  name="date"
-                  value={bookingData.date}
-                  onChange={handleInputChange}
-                  className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent"
-                  required
-                />
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Event Time *
-                </label>
-                <input
-                  type="time"
-                  name="time"
-                  value={bookingData.time}
-                  onChange={handleInputChange}
-                  className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent"
-                  required
-                />
-              </div>
-            </div>
-
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                Venue Location *
-              </label>
-              <input
-                type="text"
-                name="venue"
-                value={bookingData.venue}
-                onChange={handleInputChange}
-                className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent"
-                placeholder="Enter venue address"
-                required
-              />
-            </div>
-
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Expected Guests *
-                </label>
-                <input
-                  type="number"
-                  name="guestCount"
-                  value={bookingData.guestCount}
-                  onChange={handleInputChange}
-                  className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent"
-                  placeholder="Number of guests"
-                  required
-                />
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Budget Range
-                </label>
-                <select
-                  name="budget"
-                  value={bookingData.budget}
-                  onChange={handleInputChange}
-                  className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent"
-                >
-                  <option value="">Select budget range</option>
-                  <option value="under-50000">Under ₹50,000</option>
-                  <option value="50000-100000">₹50,000 - ₹1,00,000</option>
-                  <option value="100000-200000">₹1,00,000 - ₹2,00,000</option>
-                  <option value="200000-500000">₹2,00,000 - ₹5,00,000</option>
-                  <option value="over-500000">Over ₹5,00,000</option>
-                </select>
-              </div>
-            </div>
-
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                Event Theme
-              </label>
-              <input
-                type="text"
-                name="theme"
-                value={bookingData.theme}
-                onChange={handleInputChange}
-                className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent"
-                placeholder="e.g., Traditional, Modern, Floral, Royal"
-              />
-            </div>
-
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                Event Description
-              </label>
-              <textarea
-                name="description"
-                value={bookingData.description}
-                onChange={handleInputChange}
-                rows={4}
-                className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent"
-                placeholder="Describe your event vision and requirements..."
-              />
-            </div>
-          </div>
-        );
-
-      case 2:
-        return (
-          <div className="space-y-6">
-            <div className="flex justify-between items-center">
-              <h3 className="text-2xl font-bold text-gray-900">Select Vendors</h3>
-              <button
-                onClick={() => setShowVendorModal(true)}
-                className="bg-purple-600 text-white px-6 py-3 rounded-lg hover:bg-purple-700 transition-colors duration-300 flex items-center"
-              >
-                <Plus className="h-5 w-5 mr-2" />
-                Browse Vendors
-              </button>
-            </div>
-            
-            <p className="text-gray-600">
-              Choose the vendors you need for your event. You can browse by category and budget to find the perfect match.
-            </p>
-
-            {/* Selected Vendors */}
-            {bookingData.selectedVendors.length > 0 ? (
-              <div className="space-y-4">
-                <h4 className="text-lg font-semibold text-gray-900">Selected Vendors</h4>
-                {bookingData.selectedVendors.map(({ vendor, quantity, selectedBudget }) => (
-                  <div key={vendor.id} className="border border-gray-200 rounded-xl p-4 bg-purple-50">
-                    <div className="flex items-center justify-between">
-                      <div className="flex items-center space-x-4">
-                        <img
-                          src={vendor.image}
-                          alt={vendor.name}
-                          className="w-16 h-16 rounded-lg object-cover"
-                        />
-                        <div>
-                          <h5 className="font-bold text-gray-900">{vendor.name}</h5>
-                          <p className="text-purple-600 font-medium">{vendor.service}</p>
-                          <div className="flex items-center mt-1">
-                            <Star className="h-4 w-4 text-amber-500 mr-1" />
-                            <span className="text-sm text-gray-600">{vendor.rating}</span>
-                            <span className="text-sm text-gray-500 ml-2">{vendor.location}</span>
-                          </div>
-                          {selectedBudget && (
-                            <p className="text-sm text-green-600 font-medium">
-                              Selected Budget: ₹{selectedBudget.toLocaleString()}
-                            </p>
-                          )}
-                        </div>
-                      </div>
-                      
-                      <div className="flex items-center space-x-4">
-                        <div className="flex items-center space-x-2">
-                          <button
-                            onClick={() => updateVendorQuantity(vendor.id, quantity - 1)}
-                            className="w-8 h-8 rounded-full bg-gray-200 flex items-center justify-center hover:bg-gray-300"
-                          >
-                            <Minus className="h-4 w-4" />
-                          </button>
-                          <span className="w-8 text-center font-semibold">{quantity}</span>
-                          <button
-                            onClick={() => updateVendorQuantity(vendor.id, quantity + 1)}
-                            className="w-8 h-8 rounded-full bg-purple-600 text-white flex items-center justify-center hover:bg-purple-700"
-                          >
-                            <Plus className="h-4 w-4" />
-                          </button>
-                        </div>
-                        
-                        <div className="text-right">
-                          <p className="font-bold text-purple-600">
-                            ₹{(selectedBudget || vendor.priceMin).toLocaleString()}
-                          </p>
-                          {quantity > 1 && (
-                            <p className="text-sm text-gray-600">× {quantity}</p>
-                          )}
-                        </div>
-                        
-                        <button
-                          onClick={() => removeVendor(vendor.id)}
-                          className="text-red-500 hover:text-red-700 p-2"
-                        >
-                          <X className="h-5 w-5" />
-                        </button>
-                      </div>
-                    </div>
-                  </div>
-                ))}
-                
-                <div className="bg-purple-50 rounded-xl p-6 mt-6">
-                  <h4 className="font-bold text-gray-900 mb-4">Booking Summary</h4>
-                  <div className="space-y-2">
-                    <div className="flex justify-between items-center text-lg font-bold">
-                      <span>Total Amount:</span>
-                      <span className="text-purple-600">₹{bookingData.totalAmount.toLocaleString()}</span>
-                    </div>
-                    <div className="flex justify-between items-center text-sm text-gray-600">
-                      <span>Advance Payment (30%):</span>
-                      <span>₹{bookingData.advanceAmount.toLocaleString()}</span>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            ) : (
-              <div className="text-center py-12 bg-gray-50 rounded-xl">
-                <Users className="h-16 w-16 text-gray-400 mx-auto mb-4" />
-                <h4 className="text-lg font-semibold text-gray-900 mb-2">No Vendors Selected</h4>
-                <p className="text-gray-600 mb-4">Browse our vendor directory to find the perfect services for your event.</p>
-                <button
-                  onClick={() => setShowVendorModal(true)}
-                  className="bg-purple-600 text-white px-6 py-3 rounded-lg hover:bg-purple-700 transition-colors duration-300"
-                >
-                  Browse Vendors
-                </button>
-              </div>
-            )}
-
-            {/* Vendor Selection Modal */}
-            {showVendorModal && (
-              <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
-                <div className="bg-white rounded-2xl max-w-6xl max-h-[90vh] overflow-hidden w-full">
-                  <div className="sticky top-0 bg-white border-b border-gray-200 p-6 flex justify-between items-center">
-                    <h3 className="text-2xl font-bold text-gray-900">Select Vendors</h3>
-                    <button
-                      onClick={() => setShowVendorModal(false)}
-                      className="text-gray-400 hover:text-gray-600"
-                    >
-                      <X className="h-8 w-8" />
-                    </button>
-                  </div>
-                  
-                  {/* Filters */}
-                  <div className="p-6 border-b border-gray-200 bg-gray-50">
-                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                      <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-2">Category</label>
-                        <select
-                          value={vendorFilters.category}
-                          onChange={(e) => setVendorFilters(prev => ({ ...prev, category: e.target.value }))}
-                          className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500"
-                        >
-                          {categories.map(category => (
-                            <option key={category.id} value={category.id}>{category.name}</option>
-                          ))}
-                        </select>
-                      </div>
-                      
-                      <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-2">Budget Range</label>
-                        <select
-                          value={vendorFilters.budget}
-                          onChange={(e) => setVendorFilters(prev => ({ ...prev, budget: e.target.value }))}
-                          className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500"
-                        >
-                          {budgetRanges.map(range => (
-                            <option key={range.id} value={range.id}>{range.name}</option>
-                          ))}
-                        </select>
-                      </div>
-                      
-                      <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-2">Search</label>
-                        <div className="relative">
-                          <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-5 w-5 text-gray-400" />
-                          <input
-                            type="text"
-                            value={vendorFilters.search}
-                            onChange={(e) => setVendorFilters(prev => ({ ...prev, search: e.target.value }))}
-                            className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500"
-                            placeholder="Search vendors..."
-                          />
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-                  
-                  {/* Vendor Grid */}
-                  <div className="p-6 overflow-y-auto max-h-[60vh]">
-                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                      {filteredVendors.map((vendor) => {
-                        const isSelected = bookingData.selectedVendors.some(v => v.vendor.id === vendor.id);
-                        
-                        return (
-                          <VendorCard
-                            key={vendor.id}
-                            vendor={vendor}
-                            isSelected={isSelected}
-                            onAdd={addVendor}
-                          />
-                        );
-                      })}
-                    </div>
-                    
-                    {filteredVendors.length === 0 && (
-                      <div className="text-center py-12">
-                        <Filter className="h-16 w-16 text-gray-400 mx-auto mb-4" />
-                        <h4 className="text-lg font-semibold text-gray-900 mb-2">No Vendors Found</h4>
-                        <p className="text-gray-600">Try adjusting your filters to see more vendors.</p>
-                      </div>
-                    )}
-                  </div>
-                </div>
-              </div>
-            )}
-          </div>
-        );
-
-      case 3:
-        return (
-          <div className="space-y-6">
-            <h3 className="text-2xl font-bold text-gray-900 mb-6">
-              Booking Summary
-            </h3>
-
-            <div className="bg-gray-50 rounded-xl p-6">
-              <h4 className="font-bold text-gray-900 mb-4">Event Details</h4>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
-                <div>
-                  <span className="font-medium">Event:</span>{' '}
-                  {bookingData.eventName}
-                </div>
-                <div>
-                  <span className="font-medium">Type:</span>{' '}
-                  {bookingData.eventType}
-                </div>
-                <div>
-                  <span className="font-medium">Date:</span> {bookingData.date}
-                </div>
-                <div>
-                  <span className="font-medium">Time:</span> {bookingData.time}
-                </div>
-                <div>
-                  <span className="font-medium">Venue:</span>{' '}
-                  {bookingData.venue}
-                </div>
-                <div>
-                  <span className="font-medium">Guests:</span>{' '}
-                  {bookingData.guestCount}
-                </div>
-                {bookingData.theme && (
-                  <div>
-                    <span className="font-medium">Theme:</span>{' '}
-                    {bookingData.theme}
-                  </div>
-                )}
-              </div>
-            </div>
-
-            <div className="bg-purple-50 rounded-xl p-6">
-              <h4 className="font-bold text-gray-900 mb-4">Selected Vendors</h4>
-              <div className="space-y-3">
-                {bookingData.selectedVendors.map(({ vendor, quantity, selectedBudget }) => (
-                  <div key={vendor.id} className="flex justify-between items-center">
-                    <div>
-                      <span className="font-medium">{vendor.name}</span>
-                      <span className="text-gray-600 ml-2">({vendor.service})</span>
-                      {quantity > 1 && (
-                        <span className="text-purple-600 ml-2">× {quantity}</span>
-                      )}
-                    </div>
-                    <span className="font-semibold text-purple-600">
-                      ₹{(selectedBudget || vendor.priceMin).toLocaleString()}
-                    </span>
-                  </div>
-                ))}
-              </div>
-            </div>
-
-            <div className="bg-amber-50 rounded-xl p-6">
-              <h4 className="font-bold text-gray-900 mb-4">Payment Summary</h4>
-              <div className="space-y-2">
-                <div className="flex justify-between items-center">
-                  <span>Total Event Cost:</span>
-                  <span className="font-semibold">
-                    ₹{bookingData.totalAmount.toLocaleString()}
-                  </span>
-                </div>
-                <div className="flex justify-between items-center text-purple-600">
-                  <span>Advance Payment (30%):</span>
-                  <span className="font-bold text-lg">
-                    ₹{bookingData.advanceAmount.toLocaleString()}
-                  </span>
-                </div>
-                <div className="flex justify-between items-center text-gray-600">
-                  <span>Remaining Amount:</span>
-                  <span>
-                    ₹
-                    {(
-                      bookingData.totalAmount - bookingData.advanceAmount
-                    ).toLocaleString()}
-                  </span>
-                </div>
-              </div>
-            </div>
-          </div>
-        );
-
-      case 4:
-        return (
-          <div className="space-y-6">
-            <h3 className="text-2xl font-bold text-gray-900 mb-6">
-              Payment Details
-            </h3>
-            <p className="text-gray-600 mb-6">
-              Pay advance amount of{' '}
-              <span className="font-bold text-purple-600">
-                ₹{bookingData.advanceAmount.toLocaleString()}
-              </span>{' '}
-              to confirm your booking.
-            </p>
-
-            <div className="bg-white border border-gray-200 rounded-xl p-6">
-              <div className="mb-6">
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Payment Method
-                </label>
-              <div className="flex flex-wrap gap-3 mb-6">
-                {['card', 'upi-app', 'upi', 'netbanking', 'wallet', 'others'].map((method) => {
-                  const methodLabels: Record<string, string> = {
-                    card: 'Credit/Debit Card',
-                    'upi-app': 'UPI by App',
-                    upi: 'UPI Payment',
-                    netbanking: 'Net Banking',
-                    wallet: 'Wallet',
-                    others: 'Others',
-                  };
-                  const isSelected = paymentData.paymentMethod === method;
-                  return (
-                    <button
-                      key={method}
-                      type="button"
-                      onClick={() => {
-                        setPaymentData(prev => ({ ...prev, paymentMethod: method }));
-                        sendPaymentMessageToApp(method);
-                      }}
-                      className={`px-4 py-3 border rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500 transition-colors duration-300 ${
-                        isSelected
-                          ? 'bg-purple-600 text-white border-purple-600'
-                          : 'bg-white border-gray-300 text-gray-700 hover:bg-purple-50'
-                      }`}
-                    >
-                      {methodLabels[method]}
-                    </button>
-                  );
-                })}
-              </div>
-              </div>
-
-              {paymentData.paymentMethod === 'card' && (
-                <div className="space-y-4">
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">
-                      Cardholder Name
-                    </label>
-                    <input
-                      type="text"
-                      name="cardholderName"
-                      value={paymentData.cardholderName}
-                      onChange={handlePaymentChange}
-                      className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent"
-                      placeholder="Enter cardholder name"
-                    />
-                  </div>
-
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">
-                      Card Number
-                    </label>
-                    <input
-                      type="text"
-                      name="cardNumber"
-                      value={paymentData.cardNumber}
-                      onChange={handlePaymentChange}
-                      className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent"
-                      placeholder="1234 5678 9012 3456"
-                      maxLength={19}
-                    />
-                  </div>
-
-                  <div className="grid grid-cols-2 gap-4">
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-2">
-                        Expiry Date
-                      </label>
-                      <input
-                        type="text"
-                        name="expiryDate"
-                        value={paymentData.expiryDate}
-                        onChange={handlePaymentChange}
-                        className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent"
-                        placeholder="MM/YY"
-                        maxLength={5}
-                      />
-                    </div>
-
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-2">
-                        CVV
-                      </label>
-                      <input
-                        type="text"
-                        name="cvv"
-                        value={paymentData.cvv}
-                        onChange={handlePaymentChange}
-                        className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent"
-                        placeholder="123"
-                        maxLength={3}
-                      />
-                    </div>
-                  </div>
-                </div>
-              )}
-
-            {(paymentData.paymentMethod === 'upi' || paymentData.paymentMethod === 'upi-app') && (
-              <div>
-                {paymentData.paymentMethod === 'upi' && (
-                  <>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
-                    UPI ID
-                  </label>
-                  <input
-                    type="text"
-                    className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent"
-                    placeholder="yourname@upi"
-                  />
-                  </>
-                )}
-                {paymentData.paymentMethod === 'upi-app' && (
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">
-                      Select UPI App
-                    </label>
-                    <select
-                      name="upiApp"
-                      value={paymentData.upiApp || ''}
-                      onChange={(e) =>
-                        setPaymentData(prev => ({ ...prev, upiApp: e.target.value }))
-                      }
-                      className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent"
-                    >
-                      <option value="">Select an app</option>
-                      <option value="googlepay">Google Pay</option>
-                      <option value="phonepe">PhonePe</option>
-                      <option value="paytm">Paytm</option>
-                      <option value="bhim">BHIM</option>
-                      <option value="amazonpay">Amazon Pay</option>
-                    </select>
-                    {paymentData.upiApp && (
-                      <p className="mt-2 text-gray-700">
-                        Please open {paymentData.upiApp.charAt(0).toUpperCase() + paymentData.upiApp.slice(1)} to complete the payment.
-                      </p>
-                    )}
-                  </div>
-                )}
-              </div>
-            )}
-
-            {paymentData.paymentMethod === 'netbanking' && (
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Select Bank
-                </label>
-                <select className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent">
-                  <option value="">Choose your bank</option>
-                  <option value="sbi">State Bank of India</option>
-                  <option value="hdfc">HDFC Bank</option>
-                  <option value="icici">ICICI Bank</option>
-                  <option value="axis">Axis Bank</option>
-                  <option value="pnb">Punjab National Bank</option>
-                </select>
-                <p className="text-gray-700 mt-2">
-                  Please complete the payment through your selected bank's net banking portal.
-                </p>
-              </div>
-            )}
-            {paymentData.paymentMethod === 'wallet' && (
-              <div>
-                <p className="text-gray-700">
-                  Please open your wallet app to complete the payment.
-                </p>
-              </div>
-            )}
-            {paymentData.paymentMethod === 'others' && (
-              <div>
-                <p className="text-gray-700">
-                  Please follow the instructions provided by your selected payment method.
-                </p>
-              </div>
-            )}
-          </div>
-
-          {paymentStatus === 'pending' && (
-            <div className="bg-yellow-50 border border-yellow-200 rounded-xl p-4 mt-4">
-              <div className="flex items-center">
-                <svg
-                  className="animate-spin h-5 w-5 text-yellow-600 mr-2"
-                  xmlns="http://www.w3.org/2000/svg"
-                  fill="none"
-                  viewBox="0 0 24 24"
-                >
-                  <circle
-                    className="opacity-25"
-                    cx="12"
-                    cy="12"
-                    r="10"
-                    stroke="currentColor"
-                    strokeWidth="4"
-                  ></circle>
-                  <path
-                    className="opacity-75"
-                    fill="currentColor"
-                    d="M4 12a8 8 0 018-8v8z"
-                  ></path>
-                </svg>
-                <span className="text-sm text-yellow-800">Processing payment...</span>
-              </div>
-            </div>
-          )}
-
-          {paymentStatus === 'completed' && (
-            <div className="bg-green-50 border border-green-200 rounded-xl p-4 mt-4">
-              <div className="flex items-center">
-                <CheckCircle className="h-5 w-5 text-green-600 mr-2" />
-                <span className="text-sm text-green-800">{paymentMessage}</span>
-              </div>
-            </div>
-          )}
-
-          {paymentStatus === 'failed' && (
-            <div className="bg-red-50 border border-red-200 rounded-xl p-4 mt-4">
-              <div className="flex items-center">
-                <svg
-                  className="h-5 w-5 text-red-600 mr-2"
-                  xmlns="http://www.w3.org/2000/svg"
-                  fill="none"
-                  viewBox="0 0 24 24"
-                  stroke="currentColor"
-                  strokeWidth="2"
-                >
-                  <path
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    d="M6 18L18 6M6 6l12 12"
-                  />
-                </svg>
-                <span className="text-sm text-red-800">{paymentMessage}</span>
-              </div>
-            </div>
-          )}
-          </div>
-        );
-
-      default:
-        return null;
-    }
+    // Simulate card payment processing
+    setTimeout(() => {
+      setPaymentStatus('completed');
+      setIsProcessingPayment(false);
+      
+      const bookingData = {
+        ...eventDetails,
+        ...contactInfo,
+        selectedVendors,
+        totalAmount,
+        advanceAmount,
+        paymentMethod: 'Card Payment',
+        companyUpiId,
+        id: Date.now().toString(),
+        paidAmount: advanceAmount,
+        status: 'confirmed' as "confirmed" | "completed" | "pending",
+        bookingDate: new Date().toISOString(),
+      };
+      
+      saveBookingData(bookingData);
+      setCurrentStep(4);
+    }, 3000);
   };
 
   if (!user) {
     return (
       <div className="min-h-screen bg-gradient-to-br from-purple-50 to-amber-50 flex items-center justify-center">
         <div className="text-center">
-          <h2 className="text-3xl font-bold text-gray-900 mb-4">
-            Please Login to Continue
-          </h2>
-          <p className="text-gray-600 mb-6">
-            You need to be logged in to book an event.
-          </p>
-          <button
-            onClick={() => navigate('/login')}
-            className="bg-purple-600 text-white px-8 py-3 rounded-lg hover:bg-purple-700 transition-colors duration-300"
-          >
-            Login Now
-          </button>
+          <h2 className="text-3xl font-bold text-gray-900 mb-4">Please Login</h2>
+          <p className="text-gray-600 mb-4">You need to be logged in to book an event.</p>
         </div>
       </div>
     );
@@ -1222,267 +523,755 @@ const BookingPage = () => {
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-purple-50 to-amber-50 pt-20">
-      <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
+      <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        {/* Header */}
+        <div className="text-center mb-8">
+          <button
+            onClick={() => navigate(-1)}
+            className="flex items-center text-purple-600 hover:text-purple-700 mb-4 transition-colors duration-300"
+          >
+            <ArrowLeft className="h-5 w-5 mr-2" />
+            Back
+          </button>
+          <h1 className="text-4xl font-bold text-gray-900 mb-2">Book Your Event</h1>
+          <p className="text-xl text-gray-600">Let's create something magical together</p>
+        </div>
+
         {/* Progress Steps */}
-        <div className="mb-12">
-          <div className="flex items-center justify-between">
+        <div className="flex items-center justify-center mb-12">
+          <div className="flex items-center space-x-4">
             {[1, 2, 3, 4].map((step) => (
               <div key={step} className="flex items-center">
-                <div
-                  className={`w-10 h-10 rounded-full flex items-center justify-center font-semibold ${
-                    step <= currentStep
-                      ? 'bg-purple-600 text-white'
-                      : 'bg-gray-200 text-gray-600'
-                  }`}
-                >
-                  {step}
+                <div className={`w-10 h-10 rounded-full flex items-center justify-center font-semibold ${
+                  currentStep >= step 
+                    ? 'bg-purple-600 text-white' 
+                    : 'bg-gray-200 text-gray-600'
+                }`}>
+                  {currentStep > step ? <CheckCircle className="h-6 w-6" /> : step}
                 </div>
                 {step < 4 && (
-                  <div
-                    className={`w-24 h-1 mx-4 ${
-                      step < currentStep ? 'bg-purple-600' : 'bg-gray-200'
-                    }`}
-                  />
+                  <div className={`w-16 h-1 mx-2 ${
+                    currentStep > step ? 'bg-purple-600' : 'bg-gray-200'
+                  }`} />
                 )}
               </div>
             ))}
           </div>
-          <div className="flex justify-between mt-4 text-sm">
-            <span
-              className={
-                currentStep >= 1
-                  ? 'text-purple-600 font-medium'
-                  : 'text-gray-500'
-              }
-            >
-              Event Details
-            </span>
-            <span
-              className={
-                currentStep >= 2
-                  ? 'text-purple-600 font-medium'
-                  : 'text-gray-500'
-              }
-            >
-              Select Vendors
-            </span>
-            <span
-              className={
-                currentStep >= 3
-                  ? 'text-purple-600 font-medium'
-                  : 'text-gray-500'
-              }
-            >
-              Review Booking
-            </span>
-            <span
-              className={
-                currentStep >= 4
-                  ? 'text-purple-600 font-medium'
-                  : 'text-gray-500'
-              }
-            >
-              Payment
-            </span>
+        </div>
+
+        {/* Step 1: Event Details */}
+        {currentStep === 1 && (
+          <div className="bg-white rounded-2xl shadow-xl p-8">
+            <h2 className="text-3xl font-bold text-gray-900 mb-8">Event Details</h2>
+            <form onSubmit={handleEventDetailsSubmit} className="space-y-6">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">Event Name</label>
+                  <input
+                    type="text"
+                    value={eventDetails.eventName}
+                    onChange={(e) => setEventDetails({...eventDetails, eventName: e.target.value})}
+                    className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+                    placeholder="Enter event name"
+                  />
+                </div>
+                
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">Event Type *</label>
+                  <select
+                    value={eventDetails.eventType}
+                    onChange={(e) => setEventDetails({...eventDetails, eventType: e.target.value})}
+                    className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+                    required
+                  >
+                    <option value="">Select event type</option>
+                    <option value="wedding">Wedding</option>
+                    <option value="engagement">Engagement</option>
+                    <option value="birthday">Birthday Party</option>
+                    <option value="corporate">Corporate Event</option>
+                    <option value="family-function">Family Function</option>
+                    <option value="anniversary">Anniversary</option>
+                  </select>
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">Event Date *</label>
+                  <input
+                    type="date"
+                    value={eventDetails.date}
+                    onChange={(e) => setEventDetails({...eventDetails, date: e.target.value})}
+                    className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+                    required
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">Event Time</label>
+                  <input
+                    type="time"
+                    value={eventDetails.time}
+                    onChange={(e) => setEventDetails({...eventDetails, time: e.target.value})}
+                    className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">Venue/Location *</label>
+                  <input
+                    type="text"
+                    value={eventDetails.venue}
+                    onChange={(e) => setEventDetails({...eventDetails, venue: e.target.value})}
+                    className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+                    placeholder="Enter venue or location"
+                    required
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">Number of Guests *</label>
+                  <input
+                    type="number"
+                    value={eventDetails.guestCount}
+                    onChange={(e) => setEventDetails({...eventDetails, guestCount: e.target.value})}
+                    className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+                    placeholder="Expected number of guests"
+                    required
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">Budget Range</label>
+                  <select
+                    value={eventDetails.budget}
+                    onChange={(e) => setEventDetails({...eventDetails, budget: e.target.value})}
+                    className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+                  >
+                    <option value="">Select budget range</option>
+                    <option value="under-50000">Under ₹50,000</option>
+                    <option value="50000-100000">₹50,000 - ₹1,00,000</option>
+                    <option value="100000-250000">₹1,00,000 - ₹2,50,000</option>
+                    <option value="250000-500000">₹2,50,000 - ₹5,00,000</option>
+                    <option value="over-500000">Over ₹5,00,000</option>
+                  </select>
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">Theme/Style</label>
+                  <input
+                    type="text"
+                    value={eventDetails.theme}
+                    onChange={(e) => setEventDetails({...eventDetails, theme: e.target.value})}
+                    className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+                    placeholder="e.g., Traditional, Modern, Floral"
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">Event Description</label>
+                <textarea
+                  value={eventDetails.description}
+                  onChange={(e) => setEventDetails({...eventDetails, description: e.target.value})}
+                  className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+                  rows={4}
+                  placeholder="Describe your event vision and requirements..."
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">Special Requirements</label>
+                <textarea
+                  value={eventDetails.specialRequirements}
+                  onChange={(e) => setEventDetails({...eventDetails, specialRequirements: e.target.value})}
+                  className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+                  rows={3}
+                  placeholder="Any special requirements or requests..."
+                />
+              </div>
+
+              <button
+                type="submit"
+                className="w-full bg-purple-600 text-white px-8 py-4 rounded-lg hover:bg-purple-700 transition-colors duration-300 font-semibold text-lg"
+              >
+                Continue to Vendor Selection
+              </button>
+            </form>
           </div>
-        </div>
+        )}
 
-        {/* Step Content */}
-        <div className="bg-white rounded-2xl shadow-xl p-8 mb-8">
-          {renderStepContent()}
-        </div>
+        {/* Step 2: Vendor Selection */}
+        {currentStep === 2 && (
+          <div className="space-y-8">
+            <div className="bg-white rounded-2xl shadow-xl p-8">
+              <h2 className="text-3xl font-bold text-gray-900 mb-8">Select Vendors</h2>
+              
+              {/* Selected Vendors Summary */}
+              {selectedVendors.length > 0 && (
+                <div className="mb-8 p-6 bg-purple-50 rounded-xl">
+                  <h3 className="text-xl font-bold text-gray-900 mb-4">Selected Vendors</h3>
+                  <div className="space-y-4">
+                    {selectedVendors.map(({ vendor, quantity, selectedBudget }) => (
+                      <div key={vendor.id} className="flex items-center justify-between bg-white p-4 rounded-lg">
+                        <div className="flex items-center space-x-4">
+                          <img src={vendor.image} alt={vendor.name} className="w-12 h-12 rounded-lg object-cover" />
+                          <div>
+                            <h4 className="font-bold text-gray-900">{vendor.name}</h4>
+                            <p className="text-purple-600 text-sm">{vendor.service}</p>
+                            <p className="text-gray-600 text-sm">Quantity: {quantity}</p>
+                          </div>
+                        </div>
+                        <div className="text-right">
+                          <p className="font-bold text-green-600">
+                            ₹{((selectedBudget || vendor.priceMin) * 
+                              (vendor.service.includes('person') ? parseInt(eventDetails.guestCount || '50') : 1) * 
+                              quantity).toLocaleString()}
+                          </p>
+                          <button
+                            onClick={() => removeVendor(vendor.id)}
+                            className="text-red-500 hover:text-red-700 text-sm"
+                          >
+                            Remove
+                          </button>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                  <div className="mt-4 pt-4 border-t border-purple-200">
+                    <div className="flex justify-between items-center text-xl font-bold">
+                      <span>Total Amount:</span>
+                      <span className="text-purple-600">₹{totalAmount.toLocaleString()}</span>
+                    </div>
+                  </div>
+                </div>
+              )}
 
-        {/* Navigation Buttons */}
-        <div className="flex justify-between">
-          <button
-            onClick={prevStep}
-            disabled={currentStep === 1}
-            className="px-6 py-3 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors duration-300 disabled:opacity-50 disabled:cursor-not-allowed"
-          >
-            Previous
-          </button>
+              {/* Available Vendors */}
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                {mockVendors.map((vendor) => (
+                  <VendorCard
+                    key={vendor.id}
+                    vendor={vendor}
+                    onSelect={handleVendorSelection}
+                    isSelected={selectedVendors.some(v => v.vendor.id === vendor.id)}
+                    guestCount={parseInt(eventDetails.guestCount || '50')}
+                  />
+                ))}
+              </div>
 
-          {currentStep < 4 ? (
-            <button
-              onClick={nextStep}
-              disabled={
-                (currentStep === 1 &&
-                  (!bookingData.eventName ||
-                    !bookingData.eventType ||
-                    !bookingData.date ||
-                    !bookingData.venue)) ||
-                (currentStep === 2 && bookingData.selectedVendors.length === 0)
-              }
-              className="px-6 py-3 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition-colors duration-300 disabled:opacity-50 disabled:cursor-not-allowed"
-            >
-              Next
-            </button>
-          ) : (
-            <button
-              onClick={handleBookingSubmit}
-              className="px-8 py-3 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors duration-300 flex items-center"
-            >
-              <CreditCard className="h-5 w-5 mr-2" />
-              Pay ₹{bookingData.advanceAmount.toLocaleString()} & Confirm
-              Booking
-            </button>
-          )}
-        </div>
+              <div className="mt-8 flex justify-between">
+                <button
+                  onClick={() => setCurrentStep(1)}
+                  className="bg-gray-300 text-gray-700 px-8 py-4 rounded-lg hover:bg-gray-400 transition-colors duration-300 font-semibold"
+                >
+                  Back to Event Details
+                </button>
+                <button
+                  onClick={() => setCurrentStep(3)}
+                  className="bg-purple-600 text-white px-8 py-4 rounded-lg hover:bg-purple-700 transition-colors duration-300 font-semibold"
+                  disabled={selectedVendors.length === 0}
+                >
+                  Continue to Contact & Payment
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Step 3: Contact & Payment */}
+        {currentStep === 3 && (
+          <div className="space-y-8">
+            {/* Contact Information */}
+            <div className="bg-white rounded-2xl shadow-xl p-8">
+              <h2 className="text-3xl font-bold text-gray-900 mb-8">Contact Information</h2>
+              <form onSubmit={handleContactSubmit} className="space-y-6">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">Full Name *</label>
+                    <input
+                      type="text"
+                      value={contactInfo.name}
+                      onChange={(e) => setContactInfo({...contactInfo, name: e.target.value})}
+                      className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+                      required
+                    />
+                  </div>
+                  
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">Email Address *</label>
+                    <input
+                      type="email"
+                      value={contactInfo.email}
+                      onChange={(e) => setContactInfo({...contactInfo, email: e.target.value})}
+                      className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+                      required
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">Phone Number *</label>
+                    <input
+                      type="tel"
+                      value={contactInfo.phone}
+                      onChange={(e) => setContactInfo({...contactInfo, phone: e.target.value})}
+                      className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+                      placeholder="+91 XXXXXXXXXX"
+                      required
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">Alternate Phone</label>
+                    <input
+                      type="tel"
+                      value={contactInfo.alternatePhone}
+                      onChange={(e) => setContactInfo({...contactInfo, alternatePhone: e.target.value})}
+                      className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+                      placeholder="+91 XXXXXXXXXX"
+                    />
+                  </div>
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">Address</label>
+                  <textarea
+                    value={contactInfo.address}
+                    onChange={(e) => setContactInfo({...contactInfo, address: e.target.value})}
+                    className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+                    rows={3}
+                    placeholder="Enter your complete address"
+                  />
+                </div>
+              </form>
+            </div>
+
+            {/* Payment Section */}
+            <div className="bg-white rounded-2xl shadow-xl p-8">
+              <h2 className="text-3xl font-bold text-gray-900 mb-8">Payment Details</h2>
+              
+              {/* Payment Summary */}
+              <div className="bg-gradient-to-r from-purple-50 to-amber-50 rounded-xl p-6 mb-8">
+                <h3 className="text-xl font-bold text-gray-900 mb-4">Payment Summary</h3>
+                <div className="space-y-3">
+                  <div className="flex justify-between">
+                    <span className="text-gray-600">Total Amount:</span>
+                    <span className="font-semibold">₹{totalAmount.toLocaleString()}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-gray-600">Advance Payment (30%):</span>
+                    <span className="font-bold text-purple-600">₹{advanceAmount.toLocaleString()}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-gray-600">Remaining Amount:</span>
+                    <span className="font-semibold">₹{remainingAmount.toLocaleString()}</span>
+                  </div>
+                </div>
+                
+                {/* Company Payment Info */}
+                <div className="mt-6 pt-6 border-t border-purple-200">
+                  <h4 className="font-bold text-gray-900 mb-3">Payment will be received by:</h4>
+                  <div className="bg-white rounded-lg p-4 space-y-2">
+                    <div className="flex items-center justify-between">
+                      <span className="text-gray-600">Company UPI ID:</span>
+                      <div className="flex items-center space-x-2">
+                        <span className="font-mono font-bold text-purple-600">{companyUpiId}</span>
+                        <button
+                          onClick={() => copyToClipboard(companyUpiId)}
+                          className="text-purple-600 hover:text-purple-700"
+                        >
+                          <Copy className="h-4 w-4" />
+                        </button>
+                      </div>
+                    </div>
+                    <div className="flex items-center justify-between">
+                      <span className="text-gray-600">Company Phone:</span>
+                      <div className="flex items-center space-x-2">
+                        <span className="font-semibold">{companyPhone}</span>
+                        <button
+                          onClick={() => copyToClipboard(companyPhone)}
+                          className="text-purple-600 hover:text-purple-700"
+                        >
+                          <Copy className="h-4 w-4" />
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* Payment Methods */}
+              <div className="space-y-6">
+                <h3 className="text-xl font-bold text-gray-900">Choose Payment Method</h3>
+                
+                {/* UPI Payment */}
+                <div className={`border-2 rounded-xl p-6 cursor-pointer transition-all duration-300 ${
+                  paymentMethod === 'upi' ? 'border-purple-500 bg-purple-50' : 'border-gray-200 hover:border-purple-300'
+                }`} onClick={() => setPaymentMethod('upi')}>
+                  <div className="flex items-center justify-between mb-4">
+                    <div className="flex items-center space-x-3">
+                      <Wallet className="h-6 w-6 text-purple-600" />
+                      <span className="text-lg font-semibold">UPI Payment</span>
+                    </div>
+                    <input
+                      type="radio"
+                      name="paymentMethod"
+                      value="upi"
+                      checked={paymentMethod === 'upi'}
+                      onChange={(e) => setPaymentMethod(e.target.value)}
+                      className="h-5 w-5 text-purple-600"
+                    />
+                  </div>
+                  
+                  {paymentMethod === 'upi' && (
+                    <div className="space-y-4">
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-2">Your UPI ID *</label>
+                        <input
+                          type="text"
+                          value={userUpiId}
+                          onChange={(e) => setUserUpiId(e.target.value)}
+                          className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+                          placeholder="yourname@paytm / yourname@phonepe"
+                          required
+                        />
+                      </div>
+                      
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-2">Select UPI App *</label>
+                        <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                          {upiApps.map((app) => (
+                            <button
+                              key={app.id}
+                              type="button"
+                              onClick={() => setSelectedUpiApp(app.id)}
+                              className={`p-3 border-2 rounded-lg text-center transition-all duration-300 ${
+                                selectedUpiApp === app.id
+                                  ? 'border-purple-500 bg-purple-50 text-purple-700'
+                                  : 'border-gray-200 hover:border-purple-300'
+                              }`}
+                            >
+                              <div className="font-semibold">{app.name}</div>
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+                      
+                      <button
+                        onClick={handleUpiPayment}
+                        disabled={!selectedUpiApp || !userUpiId || !contactInfo.phone || isProcessingPayment}
+                        className="w-full bg-purple-600 text-white px-6 py-3 rounded-lg hover:bg-purple-700 transition-colors duration-300 font-semibold disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center"
+                      >
+                        {isProcessingPayment ? (
+                          <>
+                            <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-white mr-2"></div>
+                            Processing...
+                          </>
+                        ) : (
+                          <>
+                            <ExternalLink className="h-5 w-5 mr-2" />
+                            Pay ₹{advanceAmount.toLocaleString()} via UPI
+                          </>
+                        )}
+                      </button>
+                    </div>
+                  )}
+                </div>
+
+                {/* Phone Payment */}
+                <div className={`border-2 rounded-xl p-6 cursor-pointer transition-all duration-300 ${
+                  paymentMethod === 'phone' ? 'border-purple-500 bg-purple-50' : 'border-gray-200 hover:border-purple-300'
+                }`} onClick={() => setPaymentMethod('phone')}>
+                  <div className="flex items-center justify-between mb-4">
+                    <div className="flex items-center space-x-3">
+                      <Smartphone className="h-6 w-6 text-green-600" />
+                      <span className="text-lg font-semibold">Phone Payment</span>
+                    </div>
+                    <input
+                      type="radio"
+                      name="paymentMethod"
+                      value="phone"
+                      checked={paymentMethod === 'phone'}
+                      onChange={(e) => setPaymentMethod(e.target.value)}
+                      className="h-5 w-5 text-purple-600"
+                    />
+                  </div>
+                  
+                  {paymentMethod === 'phone' && (
+                    <div className="space-y-4">
+                      <div className="bg-green-50 border border-green-200 rounded-lg p-4">
+                        <div className="flex items-center mb-2">
+                          <MessageCircle className="h-5 w-5 text-green-600 mr-2" />
+                          <span className="font-semibold text-green-800">WhatsApp Payment</span>
+                        </div>
+                        <p className="text-green-700 text-sm">
+                          Click below to send a WhatsApp message with payment details. Our team will assist you with the payment process.
+                        </p>
+                      </div>
+                      
+                      <button
+                        onClick={handlePhonePayment}
+                        disabled={!contactInfo.phone || isProcessingPayment}
+                        className="w-full bg-green-600 text-white px-6 py-3 rounded-lg hover:bg-green-700 transition-colors duration-300 font-semibold disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center"
+                      >
+                        {isProcessingPayment ? (
+                          <>
+                            <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-white mr-2"></div>
+                            Processing...
+                          </>
+                        ) : (
+                          <>
+                            <MessageCircle className="h-5 w-5 mr-2" />
+                            Send WhatsApp for Payment
+                          </>
+                        )}
+                      </button>
+                    </div>
+                  )}
+                </div>
+
+                {/* Card Payment */}
+                <div className={`border-2 rounded-xl p-6 cursor-pointer transition-all duration-300 ${
+                  paymentMethod === 'card' ? 'border-purple-500 bg-purple-50' : 'border-gray-200 hover:border-purple-300'
+                }`} onClick={() => setPaymentMethod('card')}>
+                  <div className="flex items-center justify-between mb-4">
+                    <div className="flex items-center space-x-3">
+                      <CreditCard className="h-6 w-6 text-blue-600" />
+                      <span className="text-lg font-semibold">Card Payment</span>
+                    </div>
+                    <input
+                      type="radio"
+                      name="paymentMethod"
+                      value="card"
+                      checked={paymentMethod === 'card'}
+                      onChange={(e) => setPaymentMethod(e.target.value)}
+                      className="h-5 w-5 text-purple-600"
+                    />
+                  </div>
+                  
+                  {paymentMethod === 'card' && (
+                    <div className="space-y-4">
+                      <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
+                        <div className="flex items-center mb-2">
+                          <Shield className="h-5 w-5 text-blue-600 mr-2" />
+                          <span className="font-semibold text-blue-800">Secure Card Payment</span>
+                        </div>
+                        <p className="text-blue-700 text-sm">
+                          Pay securely using your debit/credit card. Your payment information is encrypted and secure.
+                        </p>
+                      </div>
+                      
+                      <button
+                        onClick={handleCardPayment}
+                        disabled={!contactInfo.phone || isProcessingPayment}
+                        className="w-full bg-blue-600 text-white px-6 py-3 rounded-lg hover:bg-blue-700 transition-colors duration-300 font-semibold disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center"
+                      >
+                        {isProcessingPayment ? (
+                          <>
+                            <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-white mr-2"></div>
+                            Processing...
+                          </>
+                        ) : (
+                          <>
+                            <CreditCard className="h-5 w-5 mr-2" />
+                            Pay ₹{advanceAmount.toLocaleString()} via Card
+                          </>
+                        )}
+                      </button>
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              {/* Payment Status */}
+              {paymentStatus && (
+                <div className={`mt-6 p-4 rounded-lg ${
+                  paymentStatus === 'completed' ? 'bg-green-50 border border-green-200' :
+                  paymentStatus === 'processing' ? 'bg-yellow-50 border border-yellow-200' :
+                  'bg-red-50 border border-red-200'
+                }`}>
+                  <div className="flex items-center">
+                    {paymentStatus === 'completed' && <CheckCircle className="h-5 w-5 text-green-600 mr-2" />}
+                    {paymentStatus === 'processing' && <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-yellow-600 mr-2"></div>}
+                    {paymentStatus === 'failed' && <AlertCircle className="h-5 w-5 text-red-600 mr-2" />}
+                    <span className={`font-semibold ${
+                      paymentStatus === 'completed' ? 'text-green-800' :
+                      paymentStatus === 'processing' ? 'text-yellow-800' :
+                      'text-red-800'
+                    }`}>
+                      {paymentStatus === 'completed' && 'Payment Successful!'}
+                      {paymentStatus === 'processing' && 'Processing Payment...'}
+                      {paymentStatus === 'failed' && 'Payment Failed'}
+                    </span>
+                  </div>
+                </div>
+              )}
+
+              <div className="mt-8 flex justify-between">
+                <button
+                  onClick={() => setCurrentStep(2)}
+                  className="bg-gray-300 text-gray-700 px-8 py-4 rounded-lg hover:bg-gray-400 transition-colors duration-300 font-semibold"
+                >
+                  Back to Vendors
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Step 4: Confirmation */}
+        {currentStep === 4 && (
+          <div className="bg-white rounded-2xl shadow-xl p-8 text-center">
+            <div className="mb-8">
+              <CheckCircle className="h-16 w-16 text-green-600 mx-auto mb-4" />
+              <h2 className="text-3xl font-bold text-gray-900 mb-4">Booking Confirmed!</h2>
+              <p className="text-xl text-gray-600">
+                Thank you for choosing EventCraft. Your event booking has been confirmed.
+              </p>
+            </div>
+
+            <div className="bg-gradient-to-r from-purple-50 to-amber-50 rounded-xl p-6 mb-8">
+              <h3 className="text-xl font-bold text-gray-900 mb-4">Booking Summary</h3>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-left">
+                <div>
+                  <span className="text-gray-600">Event:</span>
+                  <p className="font-semibold">{eventDetails.eventName || eventDetails.eventType}</p>
+                </div>
+                <div>
+                  <span className="text-gray-600">Date:</span>
+                  <p className="font-semibold">{eventDetails.date}</p>
+                </div>
+                <div>
+                  <span className="text-gray-600">Venue:</span>
+                  <p className="font-semibold">{eventDetails.venue}</p>
+                </div>
+                <div>
+                  <span className="text-gray-600">Guests:</span>
+                  <p className="font-semibold">{eventDetails.guestCount}</p>
+                </div>
+                <div>
+                  <span className="text-gray-600">Total Amount:</span>
+                  <p className="font-semibold text-purple-600">₹{totalAmount.toLocaleString()}</p>
+                </div>
+                <div>
+                  <span className="text-gray-600">Advance Paid:</span>
+                  <p className="font-semibold text-green-600">₹{advanceAmount.toLocaleString()}</p>
+                </div>
+              </div>
+            </div>
+
+            <div className="space-y-4">
+              <p className="text-gray-600">
+                Our team will contact you within 24 hours to confirm all details and coordinate with your selected vendors.
+              </p>
+              <div className="flex flex-col sm:flex-row gap-4 justify-center">
+                <button
+                  onClick={() => navigate('/planning')}
+                  className="bg-purple-600 text-white px-8 py-3 rounded-lg hover:bg-purple-700 transition-colors duration-300 font-semibold"
+                >
+                  View Planning Dashboard
+                </button>
+                <button
+                  onClick={() => navigate('/')}
+                  className="border-2 border-purple-600 text-purple-600 px-8 py-3 rounded-lg hover:bg-purple-600 hover:text-white transition-colors duration-300 font-semibold"
+                >
+                  Back to Home
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );
 };
 
-// Vendor Card Component with Budget Selection
-const VendorCard: React.FC<{
-  vendor: Vendor;
+// Vendor Card Component
+const VendorCard = ({ vendor, onSelect, isSelected, guestCount }: {
+  vendor: typeof mockVendors[0];
+  onSelect: (vendor: typeof mockVendors[0], quantity: number, budget?: number) => void;
   isSelected: boolean;
-  onAdd: (vendor: Vendor, selectedBudget?: number) => void;
-}> = ({ vendor, isSelected, onAdd }) => {
-  const [showBudgetModal, setShowBudgetModal] = useState(false);
-  const [selectedBudget, setSelectedBudget] = useState(vendor.priceMin);
-  const navigate = useNavigate();
+  guestCount: number;
+}) => {
+  const [quantity, setQuantity] = useState(1);
+  const [selectedBudget, setSelectedBudget] = useState<number>(vendor.priceMin);
 
-  const budgetOptions = [
-    { value: vendor.priceMin, label: `Basic - ₹${vendor.priceMin.toLocaleString()}` },
-    { value: Math.round((vendor.priceMin + vendor.priceMax) / 2), label: `Standard - ₹${Math.round((vendor.priceMin + vendor.priceMax) / 2).toLocaleString()}` },
-    { value: vendor.priceMax, label: `Premium - ₹${vendor.priceMax.toLocaleString()}` }
-  ];
-
-  const handleAddWithBudget = () => {
-    onAdd(vendor, selectedBudget);
-    setShowBudgetModal(false);
+  const calculateCost = () => {
+    const cost = vendor.service.includes('person') 
+      ? selectedBudget * guestCount * quantity
+      : selectedBudget * quantity;
+    return cost;
   };
 
   return (
-    <>
-      <div
-        className={`border-2 rounded-xl p-4 transition-all duration-300 ${
-          isSelected
-            ? 'border-purple-500 bg-purple-50'
-            : 'border-gray-200 hover:border-purple-300'
-        }`}
-      >
-        <div className="relative mb-4">
-          <img
-            src={vendor.image}
-            alt={vendor.name}
-            className="w-full h-32 object-cover rounded-lg"
-          />
-          {isSelected && (
-            <div className="absolute top-2 right-2 bg-purple-600 text-white rounded-full p-1">
-              <CheckCircle className="h-4 w-4" />
-            </div>
-          )}
-        </div>
-
-        <h4 className="font-bold text-gray-900 mb-1">{vendor.name}</h4>
-        <p className="text-purple-600 font-medium mb-2">{vendor.service}</p>
-
-        <div className="flex items-center mb-2">
-          <Star className="h-4 w-4 text-amber-500 mr-1" />
-          <span className="text-sm text-gray-600">{vendor.rating}</span>
-          <span className="text-sm text-gray-500 ml-2">• {vendor.experience}</span>
-        </div>
-
-        <p className="text-sm text-gray-600 mb-3 line-clamp-2">{vendor.description}</p>
-
-        <div className="flex flex-wrap gap-1 mb-3">
-          {vendor.specialties.slice(0, 2).map((specialty, index) => (
-            <span 
-              key={index}
-              className="bg-gray-100 text-gray-600 px-2 py-1 rounded text-xs"
-            >
-              {specialty}
-            </span>
-          ))}
-        </div>
-
-        <div className="flex items-center justify-between">
-          <span className="text-lg font-bold text-purple-600">{vendor.price}</span>
-          <div className="flex space-x-2">
-            <button
-              onClick={() => navigate(`/vendors/${vendor.id}`)}
-              className="text-purple-600 hover:text-purple-700 p-2"
-              title="View Details"
-            >
-              <Eye className="h-4 w-4" />
-            </button>
-            <button
-              onClick={() => setShowBudgetModal(true)}
-              className="bg-purple-600 text-white px-4 py-2 rounded-lg hover:bg-purple-700 transition-colors duration-300 text-sm"
-            >
-              {isSelected ? 'Add More' : 'Add'}
-            </button>
+    <div className={`border-2 rounded-xl p-6 transition-all duration-300 ${
+      isSelected ? 'border-purple-500 bg-purple-50' : 'border-gray-200 hover:border-purple-300'
+    }`}>
+      <div className="flex items-center mb-4">
+        <img src={vendor.image} alt={vendor.name} className="w-16 h-16 rounded-lg object-cover mr-4" />
+        <div className="flex-1">
+          <h3 className="text-lg font-bold text-gray-900">{vendor.name}</h3>
+          <p className="text-purple-600 text-sm">{vendor.service}</p>
+          <div className="flex items-center mt-1">
+            <Star className="h-4 w-4 text-amber-500 mr-1" />
+            <span className="text-sm font-medium">{vendor.rating}</span>
           </div>
         </div>
       </div>
 
-      {/* Budget Selection Modal */}
-      {showBudgetModal && (
-        <div className="fixed inset-0 bg-black/50 z-60 flex items-center justify-center p-4">
-          <div className="bg-white rounded-2xl max-w-md w-full p-6">
-            <div className="flex justify-between items-center mb-6">
-              <h3 className="text-xl font-bold text-gray-900">Select Budget</h3>
-              <button
-                onClick={() => setShowBudgetModal(false)}
-                className="text-gray-400 hover:text-gray-600"
-              >
-                <X className="h-6 w-6" />
-              </button>
-            </div>
+      <p className="text-gray-600 text-sm mb-4">{vendor.description}</p>
 
-            <div className="mb-6">
-              <h4 className="font-semibold text-gray-900 mb-2">{vendor.name}</h4>
-              <p className="text-gray-600 text-sm">{vendor.service}</p>
-            </div>
-
-            <div className="space-y-3 mb-6">
-              {budgetOptions.map((option) => (
-                <label
-                  key={option.value}
-                  className={`flex items-center p-3 border-2 rounded-lg cursor-pointer transition-colors duration-300 ${
-                    selectedBudget === option.value
-                      ? 'border-purple-500 bg-purple-50'
-                      : 'border-gray-200 hover:border-purple-300'
-                  }`}
-                >
-                  <input
-                    type="radio"
-                    name="budget"
-                    value={option.value}
-                    checked={selectedBudget === option.value}
-                    onChange={(e) => setSelectedBudget(parseInt(e.target.value))}
-                    className="sr-only"
-                  />
-                  <div className="flex-1">
-                    <span className="font-medium text-gray-900">{option.label}</span>
-                  </div>
-                  {selectedBudget === option.value && (
-                    <CheckCircle className="h-5 w-5 text-purple-600" />
-                  )}
-                </label>
-              ))}
-            </div>
-
-            <div className="flex space-x-3">
-              <button
-                onClick={() => setShowBudgetModal(false)}
-                className="flex-1 border border-gray-300 text-gray-700 px-4 py-2 rounded-lg hover:bg-gray-50 transition-colors duration-300"
-              >
-                Cancel
-              </button>
-              <button
-                onClick={handleAddWithBudget}
-                className="flex-1 bg-purple-600 text-white px-4 py-2 rounded-lg hover:bg-purple-700 transition-colors duration-300"
-              >
-                Add to Booking
-              </button>
-            </div>
+      <div className="space-y-4">
+        <div>
+          <label className="block text-sm font-medium text-gray-700 mb-2">Budget Range</label>
+          <div className="flex items-center space-x-2">
+            <input
+              type="range"
+              min={vendor.priceMin}
+              max={vendor.priceMax}
+              value={selectedBudget}
+              onChange={(e) => setSelectedBudget(parseInt(e.target.value))}
+              className="flex-1"
+            />
+            <span className="text-sm font-medium text-purple-600 min-w-[100px]">
+              ₹{selectedBudget.toLocaleString()}
+            </span>
           </div>
         </div>
-      )}
-    </>
+
+        <div>
+          <label className="block text-sm font-medium text-gray-700 mb-2">Quantity</label>
+          <input
+            type="number"
+            min="1"
+            value={quantity}
+            onChange={(e) => setQuantity(parseInt(e.target.value) || 1)}
+            className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+          />
+        </div>
+
+        <div className="bg-gray-50 rounded-lg p-3">
+          <div className="flex justify-between items-center">
+            <span className="text-sm text-gray-600">Total Cost:</span>
+            <span className="font-bold text-green-600">₹{calculateCost().toLocaleString()}</span>
+          </div>
+          {vendor.service.includes('person') && (
+            <p className="text-xs text-gray-500 mt-1">
+              ₹{selectedBudget} × {guestCount} guests × {quantity} = ₹{calculateCost().toLocaleString()}
+            </p>
+          )}
+        </div>
+
+        <button
+          onClick={() => onSelect(vendor, quantity, selectedBudget)}
+          className={`w-full px-4 py-3 rounded-lg font-semibold transition-colors duration-300 ${
+            isSelected
+              ? 'bg-purple-600 text-white hover:bg-purple-700'
+              : 'bg-purple-100 text-purple-600 hover:bg-purple-200'
+          }`}
+        >
+          {isSelected ? 'Update Selection' : 'Select Vendor'}
+        </button>
+      </div>
+    </div>
   );
 };
 
