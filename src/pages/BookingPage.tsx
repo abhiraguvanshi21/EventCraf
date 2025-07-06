@@ -320,6 +320,7 @@ const BookingPage = () => {
     cvv: '',
     cardholderName: '',
     paymentMethod: 'card',
+    upiApp: '',
   });
 
   // Vendor selection filters
@@ -446,13 +447,36 @@ const BookingPage = () => {
     }
   };
 
+  const [paymentStatus, setPaymentStatus] = useState<'pending' | 'completed' | 'failed' | null>(null);
+  const [paymentMessage, setPaymentMessage] = useState<string>('');
+
+  const sendPaymentMessageToApp = (method: string) => {
+    // Simulate sending a message to the app after payment method selection
+    console.log(`Payment method selected: ${method}`);
+    setPaymentMessage(`Payment method selected: ${method}`);
+  };
+
+  const processPayment = () => {
+    // Simulate payment processing and giving money
+    setPaymentStatus('pending');
+    setTimeout(() => {
+      setPaymentStatus('completed');
+      setPaymentMessage('Payment successful! Money has been transferred.');
+    }, 2000);
+  };
+
   const handleBookingSubmit = () => {
+    if (paymentStatus !== 'completed') {
+      processPayment();
+      return;
+    }
+
     // Prepare full booking data with required fields
     const fullBookingData = {
       ...bookingData,
       id: `booking-${Date.now()}`,
       paidAmount: bookingData.advanceAmount,
-      status: "pending" as const,
+      status: "confirmed" as const,
       bookingDate: new Date().toISOString(),
     };
     // Save booking data to context
@@ -934,16 +958,36 @@ const BookingPage = () => {
                 <label className="block text-sm font-medium text-gray-700 mb-2">
                   Payment Method
                 </label>
-                <select
-                  name="paymentMethod"
-                  value={paymentData.paymentMethod}
-                  onChange={handlePaymentChange}
-                  className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent"
-                >
-                  <option value="card">Credit/Debit Card</option>
-                  <option value="upi">UPI Payment</option>
-                  <option value="netbanking">Net Banking</option>
-                </select>
+              <div className="flex flex-wrap gap-3 mb-6">
+                {['card', 'upi-app', 'upi', 'netbanking', 'wallet', 'others'].map((method) => {
+                  const methodLabels: Record<string, string> = {
+                    card: 'Credit/Debit Card',
+                    'upi-app': 'UPI by App',
+                    upi: 'UPI Payment',
+                    netbanking: 'Net Banking',
+                    wallet: 'Wallet',
+                    others: 'Others',
+                  };
+                  const isSelected = paymentData.paymentMethod === method;
+                  return (
+                    <button
+                      key={method}
+                      type="button"
+                      onClick={() => {
+                        setPaymentData(prev => ({ ...prev, paymentMethod: method }));
+                        sendPaymentMessageToApp(method);
+                      }}
+                      className={`px-4 py-3 border rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500 transition-colors duration-300 ${
+                        isSelected
+                          ? 'bg-purple-600 text-white border-purple-600'
+                          : 'bg-white border-gray-300 text-gray-700 hover:bg-purple-50'
+                      }`}
+                    >
+                      {methodLabels[method]}
+                    </button>
+                  );
+                })}
+              </div>
               </div>
 
               {paymentData.paymentMethod === 'card' && (
@@ -1011,8 +1055,10 @@ const BookingPage = () => {
                 </div>
               )}
 
-              {paymentData.paymentMethod === 'upi' && (
-                <div>
+            {(paymentData.paymentMethod === 'upi' || paymentData.paymentMethod === 'upi-app') && (
+              <div>
+                {paymentData.paymentMethod === 'upi' && (
+                  <>
                   <label className="block text-sm font-medium text-gray-700 mb-2">
                     UPI ID
                   </label>
@@ -1021,34 +1067,130 @@ const BookingPage = () => {
                     className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent"
                     placeholder="yourname@upi"
                   />
-                </div>
-              )}
+                  </>
+                )}
+                {paymentData.paymentMethod === 'upi-app' && (
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                      Select UPI App
+                    </label>
+                    <select
+                      name="upiApp"
+                      value={paymentData.upiApp || ''}
+                      onChange={(e) =>
+                        setPaymentData(prev => ({ ...prev, upiApp: e.target.value }))
+                      }
+                      className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+                    >
+                      <option value="">Select an app</option>
+                      <option value="googlepay">Google Pay</option>
+                      <option value="phonepe">PhonePe</option>
+                      <option value="paytm">Paytm</option>
+                      <option value="bhim">BHIM</option>
+                      <option value="amazonpay">Amazon Pay</option>
+                    </select>
+                    {paymentData.upiApp && (
+                      <p className="mt-2 text-gray-700">
+                        Please open {paymentData.upiApp.charAt(0).toUpperCase() + paymentData.upiApp.slice(1)} to complete the payment.
+                      </p>
+                    )}
+                  </div>
+                )}
+              </div>
+            )}
 
-              {paymentData.paymentMethod === 'netbanking' && (
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Select Bank
-                  </label>
-                  <select className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent">
-                    <option value="">Choose your bank</option>
-                    <option value="sbi">State Bank of India</option>
-                    <option value="hdfc">HDFC Bank</option>
-                    <option value="icici">ICICI Bank</option>
-                    <option value="axis">Axis Bank</option>
-                    <option value="pnb">Punjab National Bank</option>
-                  </select>
-                </div>
-              )}
-            </div>
+            {paymentData.paymentMethod === 'netbanking' && (
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Select Bank
+                </label>
+                <select className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent">
+                  <option value="">Choose your bank</option>
+                  <option value="sbi">State Bank of India</option>
+                  <option value="hdfc">HDFC Bank</option>
+                  <option value="icici">ICICI Bank</option>
+                  <option value="axis">Axis Bank</option>
+                  <option value="pnb">Punjab National Bank</option>
+                </select>
+                <p className="text-gray-700 mt-2">
+                  Please complete the payment through your selected bank's net banking portal.
+                </p>
+              </div>
+            )}
+            {paymentData.paymentMethod === 'wallet' && (
+              <div>
+                <p className="text-gray-700">
+                  Please open your wallet app to complete the payment.
+                </p>
+              </div>
+            )}
+            {paymentData.paymentMethod === 'others' && (
+              <div>
+                <p className="text-gray-700">
+                  Please follow the instructions provided by your selected payment method.
+                </p>
+              </div>
+            )}
+          </div>
 
-            <div className="bg-green-50 border border-green-200 rounded-xl p-4">
+          {paymentStatus === 'pending' && (
+            <div className="bg-yellow-50 border border-yellow-200 rounded-xl p-4 mt-4">
               <div className="flex items-center">
-                <CheckCircle className="h-5 w-5 text-green-600 mr-2" />
-                <span className="text-sm text-green-800">
-                  Your payment is secured with 256-bit SSL encryption
-                </span>
+                <svg
+                  className="animate-spin h-5 w-5 text-yellow-600 mr-2"
+                  xmlns="http://www.w3.org/2000/svg"
+                  fill="none"
+                  viewBox="0 0 24 24"
+                >
+                  <circle
+                    className="opacity-25"
+                    cx="12"
+                    cy="12"
+                    r="10"
+                    stroke="currentColor"
+                    strokeWidth="4"
+                  ></circle>
+                  <path
+                    className="opacity-75"
+                    fill="currentColor"
+                    d="M4 12a8 8 0 018-8v8z"
+                  ></path>
+                </svg>
+                <span className="text-sm text-yellow-800">Processing payment...</span>
               </div>
             </div>
+          )}
+
+          {paymentStatus === 'completed' && (
+            <div className="bg-green-50 border border-green-200 rounded-xl p-4 mt-4">
+              <div className="flex items-center">
+                <CheckCircle className="h-5 w-5 text-green-600 mr-2" />
+                <span className="text-sm text-green-800">{paymentMessage}</span>
+              </div>
+            </div>
+          )}
+
+          {paymentStatus === 'failed' && (
+            <div className="bg-red-50 border border-red-200 rounded-xl p-4 mt-4">
+              <div className="flex items-center">
+                <svg
+                  className="h-5 w-5 text-red-600 mr-2"
+                  xmlns="http://www.w3.org/2000/svg"
+                  fill="none"
+                  viewBox="0 0 24 24"
+                  stroke="currentColor"
+                  strokeWidth="2"
+                >
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    d="M6 18L18 6M6 6l12 12"
+                  />
+                </svg>
+                <span className="text-sm text-red-800">{paymentMessage}</span>
+              </div>
+            </div>
+          )}
           </div>
         );
 
